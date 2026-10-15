@@ -12,6 +12,7 @@ import {
 } from 'discord.js'
 
 import sharp from 'sharp'
+import { processOcrMessage } from './modules/ocr/handler'
 
 const token = process.env.DISCORD_TOKEN
 const userId = process.env.USER_ID
@@ -31,6 +32,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
 })
 
@@ -1014,5 +1017,11 @@ client.on(
       }
   },
 )
+
+
+client.on(Events.MessageCreate, async (message) => {
+  if (!process.env.OCR_CHANNEL_ID || message.channelId !== process.env.OCR_CHANNEL_ID) return
+  await processOcrMessage(message)
+})
 
 client.login(token)
