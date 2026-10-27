@@ -13,6 +13,19 @@ import {
 
 import sharp from 'sharp'
 import { processOcrMessage } from './modules/ocr/handler'
+import { registerOcrCommands } from './modules/ocr-manager/command.js'
+import { handleOcrLimparCommand, handleOcrManagerButton } from './modules/ocr-manager/handler.js'
+
+// DEBUG: Verificar variáveis de ambiente
+console.log('=== DEBUG INICIO ===');
+console.log('DISCORD_TOKEN existe?:', !!process.env.DISCORD_TOKEN);
+console.log('DISCORD_TOKEN length:', process.env.DISCORD_TOKEN?.length || 0);
+console.log('CATRACA_CHANNEL_ID existe?:', !!process.env.CATRACA_CHANNEL_ID);
+console.log('CATRACA_CHANNEL_ID:', process.env.CATRACA_CHANNEL_ID);
+console.log('USER_ID existe?:', !!process.env.USER_ID);
+console.log('USER_ID:', process.env.USER_ID);
+console.log('Todas variáveis:', Object.keys(process.env).filter(k => k.includes('DISCORD') || k.includes('CATRACA') || k.includes('USER') || k.includes('OCR') || k.includes('OWNER')));
+console.log('=== DEBUG FIM ===');
 
 const token = process.env.DISCORD_TOKEN
 const userId = process.env.USER_ID
@@ -922,6 +935,21 @@ client.once(
       `Bot: ${readyClient.user.tag}`,
     )
 
+    // Registrar comando /ocr-limpar
+    const clientId = process.env.DISCORD_CLIENT_ID
+
+    if (!clientId) {
+      console.log(
+        '⚠ DISCORD_CLIENT_ID não configurado — comando /ocr-limpar não será registrado.',
+      )
+    } else {
+      await registerOcrCommands(
+        token,
+        clientId,
+        process.env.GUILD_ID,
+      )
+    }
+
     try {
       // TESTE
       if (
@@ -1022,6 +1050,29 @@ client.on(
 client.on(Events.MessageCreate, async (message) => {
   if (!process.env.OCR_CHANNEL_ID || message.channelId !== process.env.OCR_CHANNEL_ID) return
   await processOcrMessage(message)
+})
+
+// ====================================
+// INTERAÇÕES (SLASH COMMANDS E BOTÕES)
+// ====================================
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  try {
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === 'ocr-limpar') {
+        await handleOcrLimparCommand(interaction)
+      }
+      return
+    }
+
+    if (interaction.isButton()) {
+      if (interaction.customId.startsWith('ocr_mgr:')) {
+        await handleOcrManagerButton(interaction)
+      }
+    }
+  } catch (error) {
+    console.error('Erro no InteractionCreate:', error)
+  }
 })
 
 client.login(token)
