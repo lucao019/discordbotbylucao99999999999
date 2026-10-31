@@ -1,6 +1,122 @@
-# Changelog — CheckIn
+﻿# Changelog — CheckIn
 
 Todas as alterações relevantes do projeto são registradas neste arquivo em ordem cronológica. Os registros descrevem o que foi implementado e testado, sem declarar como concluídas as etapas ainda pendentes.
+
+---
+
+## [Não lançado] — 2026-10-30
+
+### Contexto
+
+O bot precisava voltar a subir corretamente e o card de entrada de membros precisava renderizar de forma consistente. Também era necessário organizar o projeto e adicionar verificação contínua.
+
+### Correções
+
+- Inicialização ajustada para `tsx src/index.ts`; removido o shim `railway.js` que tentava importar TypeScript via `require`.
+- Banners animados (GIF) do card de entrada passaram a ser compostos frame a frame com metadados de página corretos, evitando o empilhamento incorreto das camadas. Se a composição animada falhar, há fallback para PNG estático.
+- Removido o bloco de log de depuração que imprimia variáveis de ambiente na inicialização.
+
+### Organização
+
+- Adicionado workflow de CI em `.github/workflows/ci.yml` (typecheck em Node 20 e 22).
+- `.gitignore` e `.dockerignore` atualizados para excluir artefatos locais (`.agents/`, `.kiro/`, `dist/`).
+- Removidos `dist/` desatualizado e pasta `.kiro/` vazia.
+- README atualizado com estrutura do projeto, seção de Docker, integração contínua e status.
+
+---
+
+## [Não lançado] — 2026-10-19
+
+### Contexto
+
+O projeto já possuía check-in automático de membros, geração de cards gráficos e OCR de imagens no canal configurado.
+
+O objetivo desta etapa foi adicionar um gerenciador de mensagens do canal OCR via comando slash e botões interativos do Discord.
+
+### Etapa 1 — Módulo de operações
+
+Criado `src/modules/ocr-manager/operations.ts`.
+
+- `fetchAllMessages`: busca todas as mensagens do canal em lotes de 100.
+- `fetchRecentMessages`: busca as N mensagens mais recentes.
+- `deleteMessages`: apaga mensagens usando bulk delete para as com menos de 14 dias e exclusão individual para as mais antigas, com delay de 400 ms entre cada exclusão individual.
+- `paginateMessages`: divide uma lista de mensagens em páginas de 10 itens para a interface de seleção.
+
+### Etapa 2 — Registro do comando slash
+
+Criado `src/modules/ocr-manager/command.ts`.
+
+- Definição do slash command `ocr-limpar`.
+- Função `registerOcrCommands` que registra o comando via REST na inicialização do bot.
+- Registro com escopo de servidor quando `GUILD_ID` estiver definido; registro global caso contrário.
+
+### Etapa 3 — Handler de interações
+
+Criado `src/modules/ocr-manager/handler.ts`.
+
+- `handleOcrLimparCommand`: responde ao comando slash com painel de gerenciamento ephemeral com três botões: Limpar tudo, Limpar quantidade e Seleção individual.
+- `handleOcrManagerButton`: roteia botões pelo prefixo `ocr_mgr:` para os fluxos correspondentes.
+- Fluxo "Limpar tudo": pede confirmação antes de apagar todas as mensagens; exibe total apagado e falhas.
+- Fluxo "Limpar quantidade": permite escolher 10, 25, 50 ou 100 mensagens; exibe prévia e pede confirmação.
+- Fluxo "Seleção individual": lista mensagens em páginas de 10; botões de toggle por item; navegação entre páginas; confirmação antes de apagar.
+- Estado de seleção individual mantido em `Map<userId, Set<messageId>>` na memória, suficiente para a janela de 15 minutos das interações.
+- Verificação de autorização: aceita `OWNER_ID` ou usuários com `ManageMessages` no canal.
+- Verificação de permissão do bot: bloqueia operações se o bot não tiver `ManageMessages`.
+- Restrição ao canal `OCR_CHANNEL_ID`.
+- Tratamento de interações expiradas (código 10062).
+
+### Etapa 4 — Integração no index.ts
+
+Modificado `src/index.ts`.
+
+- Imports de `registerOcrCommands`, `handleOcrLimparCommand` e `handleOcrManagerButton`.
+- Chamada a `registerOcrCommands` no evento `ClientReady`, condicionada à presença de `DISCORD_CLIENT_ID`.
+- Listener `InteractionCreate` adicionado após o `MessageCreate` existente; roteia comandos slash e botões para os handlers do módulo.
+- OCR e check-in preservados sem alterações.
+
+### Etapa 5 — Variáveis de ambiente
+
+Adicionadas ao `.env.example`:
+
+- `OWNER_ID`: ID do usuário com acesso irrestrito ao comando.
+- `DISCORD_CLIENT_ID`: ID da aplicação, necessário para o registro do comando via REST.
+
+### Etapa 6 — Verificação
+
+- `npx tsc --noEmit` executado após cada etapa.
+- Corrigido import de `Routes` que estava incorretamente importado de `@discordjs/rest`; movido para `discord.js`.
+- Build final sem erros de TypeScript.
+
+### Estado ao final desta etapa
+
+**Implementado e verificado:** módulo `ocr-manager` completo, integração no `index.ts`, TypeScript compilando sem erros.
+
+**Ainda pendente:** teste funcional no Discord com o bot conectado, configuração de `DISCORD_CLIENT_ID` e `OWNER_ID` no `.env` local.
+
+### Próximas etapas
+
+1. Adicionar `DISCORD_CLIENT_ID` e `OWNER_ID` ao `.env` local.
+2. Iniciar o bot e confirmar que o comando `/ocr-limpar` aparece no servidor.
+3. Testar cada fluxo: limpar tudo, limpar quantidade e seleção individual.
+4. Confirmar que OCR e check-in continuam funcionando normalmente.
+5. Criar o commit das alterações após os testes.
+
+---
+
+## [Não lançado] — 2026-10-16
+
+### Documentação
+
+- Reorganizado o README para distinguir funcionalidades disponíveis e planejadas.
+- Documentados os requisitos, as variáveis de ambiente, os comandos operacionais e os testes de OCR.
+- Registrada a transcrição de áudio como funcionalidade planejada, ainda não implementada.
+- Incluídas orientações de segurança e revisão antes de commits.
+
+### Estado
+
+- Check-in e OCR já estavam documentados e haviam sido testados anteriormente em ambiente local.
+- Esta atualização altera a documentação; não implementa transcrição de áudio.
+- A inicialização automática no Windows e a hospedagem contínua precisam de validação independente.
 
 ---
 
@@ -75,14 +191,6 @@ Os testes foram realizados em ambiente local, com o bot conectado ao Discord.
 **Validado localmente:** conexão do bot, modo de teste do card, reconstrução da catraca e OCR.
 
 **Ainda pendente:** revisão final do Git, commit das alterações e configuração de hospedagem contínua.
-
-### Próximas etapas
-
-1. Revisar `git status --short`, `git diff --check` e `git diff --stat`.
-2. Conferir os arquivos de código, documentação e dependências.
-3. Garantir que `.env` e o backup temporário não sejam incluídos no commit.
-4. Criar o commit após a revisão.
-5. Investigar e testar a hospedagem gratuita na Oracle Cloud.
 
 ---
 
