@@ -16,17 +16,6 @@ import { processOcrMessage } from './modules/ocr/handler'
 import { registerOcrCommands } from './modules/ocr-manager/command.js'
 import { handleOcrLimparCommand, handleOcrManagerButton } from './modules/ocr-manager/handler.js'
 
-// DEBUG: Verificar variáveis de ambiente
-console.log('=== DEBUG INICIO ===');
-console.log('DISCORD_TOKEN existe?:', !!process.env.DISCORD_TOKEN);
-console.log('DISCORD_TOKEN length:', process.env.DISCORD_TOKEN?.length || 0);
-console.log('CATRACA_CHANNEL_ID existe?:', !!process.env.CATRACA_CHANNEL_ID);
-console.log('CATRACA_CHANNEL_ID:', process.env.CATRACA_CHANNEL_ID);
-console.log('USER_ID existe?:', !!process.env.USER_ID);
-console.log('USER_ID:', process.env.USER_ID);
-console.log('Todas variáveis:', Object.keys(process.env).filter(k => k.includes('DISCORD') || k.includes('CATRACA') || k.includes('USER') || k.includes('OCR') || k.includes('OWNER')));
-console.log('=== DEBUG FIM ===');
-
 const token = process.env.DISCORD_TOKEN
 const userId = process.env.USER_ID
 const catracaChannelIdEnv = process.env.CATRACA_CHANNEL_ID
@@ -421,68 +410,94 @@ async function gerarProfileCard(
     }
   }
 
-    // --------------------------------
+  // --------------------------------
   // BANNER ANIMADO
   // --------------------------------
 
-  const metadata = await sharp(
-    bannerBuffer,
-    {
-      animated: true,
-    },
-  ).metadata()
+  try {
+    const metadata = await sharp(bannerBuffer, { animated: true }).metadata()
 
-  const paginas = metadata.pages ?? 1
+    const paginas = metadata.pages ?? 1
+    const loop = metadata.loop ?? 0
+    const delays =
+      metadata.delay && metadata.delay.length === paginas
+        ? metadata.delay
+        : Array<number>(paginas).fill(100)
 
-  const delays =
-    metadata.delay &&
-    metadata.delay.length === paginas
-      ? metadata.delay
-      : Array(paginas).fill(100)
+    // Compõe cada quadro do banner como um card completo (900×390)
+    const quadros: Buffer[] = []
 
-
-    const layersAnimadas: sharp.OverlayOptions[] = []
-
-  for (let pagina = 0; pagina < paginas; pagina++) {
-    const offsetY = pagina * altura
-
-    for (const layer of layersFixas) {
-      layersAnimadas.push({
-        ...layer,
-        top:
-          typeof layer.top === 'number'
-            ? layer.top + offsetY
-            : offsetY,
+    for (let pagina = 0; pagina < paginas; pagina++) {
+      const fundoBanner = await sharp(bannerBuffer, {
+        animated: true,
+        page: pagina,
+        pages: 1,
       })
+        .resize(largura, bannerHeight, { fit: 'cover', position: 'centre' })
+        .png()
+        .toBuffer()
+
+      const quadro = await sharp({
+        create: {
+          width: largura,
+          height: altura,
+          channels: 4,
+          background: '#111318',
+        },
+      })
+        .composite([
+          { input: fundoBanner, top: 0, left: 0 },
+          ...layersFixas,
+        ])
+        .raw()
+        .toBuffer()
+
+      quadros.push(quadro)
     }
-  }
 
-  const buffer = await sharp(
-    bannerBuffer,
-    {
-      animated: true,
-    },
-  )
-    .resize(largura, bannerHeight, {
-  fit: 'cover',
-  position: 'centre',
-})
-.extend({
-  bottom: altura - bannerHeight,
-  background: '#111318',
-})
-    .composite(layersAnimadas)
-    .gif({
-      loop: metadata.loop ?? 0,
-      delay: delays,
+    // Empilha os quadros em RGBA cru e codifica como um único GIF animado.
+    // pageHeight faz o sharp reinterpretar a imagem empilhada como N quadros.
+    const buffer = await sharp(Buffer.concat(quadros), {
+      raw: {
+        width: largura,
+        height: altura * paginas,
+        channels: 4,
+        pageHeight: altura,
+      },
     })
-    .toBuffer()
+      .gif({ loop, delay: delays })
+      .toBuffer()
 
-    return {
-    buffer,
-    extension: 'gif',
+    return { buffer, extension: 'gif' }
+  } catch (erro) {
+    console.error(
+      '[CATRACA] Falha no banner animado, usando PNG estático:',
+      erro,
+    )
+
+    const banner = await sharp(bannerBuffer)
+      .resize(largura, bannerHeight, { fit: 'cover', position: 'centre' })
+      .png()
+      .toBuffer()
+
+    const buffer = await sharp({
+      create: {
+        width: largura,
+        height: altura,
+        channels: 4,
+        background: '#111318',
+      },
+    })
+      .composite([
+        { input: banner, top: 0, left: 0 },
+        ...layersFixas,
+      ])
+      .png()
+      .toBuffer()
+
+    return { buffer, extension: 'png' }
   }
-} 
+}
 
 // ====================================
 // TREE VIEW

@@ -1,10 +1,10 @@
-﻿import type { Message } from 'discord.js'
+﻿import type { Attachment, Message } from 'discord.js'
 import { recognizeImage } from './recognize'
 
 const MAX_IMAGE_SIZE = 8 * 1024 * 1024
 const MAX_IMAGES_PER_MESSAGE = 3
 
-function isSupportedImage(attachment: Message['attachments'] extends Map<string, infer A> ? A : never): boolean {
+function isSupportedImage(attachment: Attachment): boolean {
   const mime = attachment.contentType?.split(';')[0].toLowerCase() ?? ''
   const name = attachment.name ?? ''
 

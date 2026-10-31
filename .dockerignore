@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log*
+.env
+.git
+.github
+.gitignore
+.agents
+.kiro
+.idea
+.vscode
+dist
