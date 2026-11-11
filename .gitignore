@@ -9,3 +9,7 @@ dist/
 # Logs e temporários
 *.log
 npm-debug.log*
+
+# Logs de erro gerados pelo bot
+logs/
+models/

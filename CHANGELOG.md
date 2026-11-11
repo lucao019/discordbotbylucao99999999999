@@ -4,7 +4,67 @@ Todas as alterações relevantes do projeto são registradas neste arquivo em or
 
 ---
 
+## [Não lançado] — 2026-11-11
+
+### Contexto
+
+O projeto do SSD (`H:\PROJETOS\CheckIn`) e a cópia do Desktop tinham seguido caminhos diferentes a partir do commit `4a7cc98`. Esta entrada integra o que existia só na cópia do Desktop (Twitch e recuperação de cards) e acrescenta log de erros, cards em alta resolução e ferramentas para refazer cards.
+
+### Corrigido
+
+- Membros que entraram com o bot offline ficavam sem card no #catraca.
+- Banner animado falhava com `Expected integer between 0 and 65535 for loop` quando o GIF informava loop 65536; agora o valor fora do intervalo vira loop infinito.
+- Transcrição de áudio: o whisper.cpp não abria o modelo quando o caminho tinha acento (`TRANSCRIÇÃO DE AUDIOS`). O modelo foi copiado para `models/ggml-small.bin` e o `WHISPER_MODEL` aponta para esse caminho, com barras normais.
+
+### Adicionado
+
+- Recuperação automática na inicialização: lê o histórico do #catraca, identifica quem não tem card pelo ID no rodapé do embed e gera apenas os que faltam, na ordem de entrada. Falha na recuperação é registrada e não impede o restante do bot de iniciar.
+- Monitoramento de live da Twitch (`src/modules/twitch/liveMonitor.ts`): consulta a API Helix a cada minuto e avisa no canal definido em `TWITCH_NOTIFY_CHANNEL_ID`. Sem as credenciais, apenas registra o aviso e o bot segue normalmente. Novas variáveis: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_CHANNEL_LOGIN`, `TWITCH_NOTIFY_CHANNEL_ID`.
+- Log de erros (`src/logger.ts`): `console.error` e `console.warn` continuam no terminal e também vão para `logs/erros-AAAA-MM-DD.log`. Crashes (`uncaughtException`) e promessas rejeitadas (`unhandledRejection`) são registrados, assim como erros de conexão do discord.js. Logs com mais de 14 dias são apagados ao iniciar. A pasta `logs/` está no `.gitignore` e no `.dockerignore`.
+- Cards em alta resolução: 1800×780 (escala 2×), em vez de 900×390. Se um GIF passar de 8 MB, o card é refeito em escala 1×, por causa do limite de upload do Discord. A largura exibida no Discord não muda, pois o embed tem largura máxima fixa; o ganho é de nitidez.
+- Comandos para refazer cards editando as mensagens existentes, sem apagar nem alterar a ordem: `--refazer-nitro` (quem tem banner ou avatar animado, usados como indicador de Nitro, já que a API não informa o Nitro de outros usuários) e `--refazer-restantes` (os demais).
+
+### Testes
+
+- Tipagem verificada com `tsc --noEmit`, sem erros.
+- Recuperação executada no Discord: 21 de 21 cards recuperados (#45 a #66).
+- Cards refeitos no Discord: 5 com Nitro e 61 sem Nitro, sem falhas registradas. O maior GIF teve 7,17 MB.
+- OCR testado localmente com uma imagem gerada: texto reconhecido corretamente.
+- Transcrição testada localmente com um áudio sintético em português: texto reconhecido corretamente em cerca de 6 s.
+- Crash, promessa rejeitada e `console.error` simulados: os três registrados no arquivo de log.
+
+### Pendente
+
+- `--rebuild` do #catraca para renumerar tudo pela ordem real de entrada. Há números repetidos nos cards antigos (#45 e #50), herdados da numeração feita no momento da entrada de cada membro.
+- Validar no Discord, com mensagens reais no canal OCR, o OCR e a transcrição de áudio.
+- Validar o aviso de live com credenciais da Twitch.
+- Hospedagem 24/7; hoje o bot só roda enquanto o comando `npm start` estiver aberto no PC.
+
+---
+
 ## [Não lançado] — 2026-10-30
+
+### Contexto
+
+O bot já reconhecia texto em imagens no canal OCR. Faltava uma forma de obter o texto de áudios e vídeos enviados no mesmo canal.
+
+### Funcionalidade
+
+- Adicionado o módulo de transcrição em `src/modules/transcribe/`.
+  - `transcribe.ts`: converte o áudio para WAV mono 16 kHz com ffmpeg e executa o binário do whisper.cpp, retornando o texto reconhecido.
+  - `handler.ts`: valida mensagens e anexos do canal OCR, baixa o arquivo e responde com o texto.
+- O `MessageCreate` passou a acionar `processTranscribeMessage`, que trata apenas áudio e vídeo (imagens continuam com o OCR).
+- Limites: até três anexos por mensagem e 25 MB por arquivo. Formatos aceitos: OGG, OPUS, MP3, M4A, WAV, FLAC, WebM, MP4, MOV e MKV.
+- A transcrição depende de `ffmpeg` e de um binário do whisper.cpp com modelo `.bin` instalados no ambiente. Novas variáveis: `WHISPER_BIN`, `WHISPER_MODEL`, `WHISPER_LANGUAGE` (opcional) e `FFMPEG_BIN` (opcional).
+- README atualizado com a seção de transcrição e as novas variáveis.
+
+### Pendente
+
+- A transcrição ainda não foi validada em execução real com o whisper.cpp e o ffmpeg instalados.
+
+---
+
+## [Não lançado] — 2026-10-30 (ajustes de inicialização e organização)
 
 ### Contexto
 

@@ -12,7 +12,7 @@ Bot para Discord desenvolvido com Node.js e TypeScript. O projeto combina automa
 - [x] OCR de imagens em português e inglês.
 - [x] Gerenciador do canal OCR via `/ocr-limpar`.
 - [x] Integração contínua (GitHub Actions) com typecheck.
-- [ ] Transcrição de arquivos de áudio.
+- [x] Transcrição de áudio e vídeo no canal OCR (whisper.cpp local).
 - [ ] Validar e documentar a inicialização automática após as últimas alterações no ambiente local.
 - [ ] Avaliar hospedagem contínua fora do computador pessoal.
 
@@ -83,7 +83,25 @@ Manage Messages
 
 ### Transcrição de áudio
 
-A transcrição de áudio é uma funcionalidade planejada. Ela ainda precisa de implementação e testes antes de ser anunciada como disponível.
+O bot transcreve áudios e vídeos enviados no mesmo canal configurado para OCR e devolve o texto reconhecido como mensagem copiável.
+
+O módulo está organizado em:
+
+- `src/modules/transcribe/transcribe.ts`: conversão do áudio para WAV mono 16 kHz via ffmpeg e execução do binário do whisper.cpp.
+- `src/modules/transcribe/handler.ts`: validação de mensagens, anexos, download e resposta no Discord.
+
+O handler limita o processamento a três anexos por mensagem e 25 MB por arquivo. São aceitos formatos de áudio e vídeo como OGG, OPUS, MP3, M4A, WAV, FLAC, WebM, MP4, MOV e MKV. Arquivos de imagem são ignorados aqui e tratados pelo OCR no mesmo canal.
+
+Diferente do OCR, a transcrição depende de programas externos instalados no ambiente — não há dependência npm. É necessário ter o `ffmpeg` e um binário do [whisper.cpp](https://github.com/ggerganov/whisper.cpp) disponíveis, além de um modelo compatível (por exemplo `ggml-base.bin`).
+
+A precisão depende da qualidade do áudio, do ruído e da clareza da fala. A transcrição reproduz a fala detectada, mas não garante pontuação ou interpretação correta do conteúdo.
+
+Variáveis relacionadas:
+
+- `WHISPER_BIN`: caminho do executável do whisper.cpp (obrigatória para transcrever).
+- `WHISPER_MODEL`: caminho do arquivo de modelo `.bin` (obrigatória para transcrever).
+- `WHISPER_LANGUAGE` (opcional): idioma da fala; padrão `pt`.
+- `FFMPEG_BIN` (opcional): caminho do executável `ffmpeg`; padrão `ffmpeg` no PATH.
 
 ## Integração contínua
 
@@ -135,6 +153,8 @@ DISCORD_TOKEN=
 USER_ID=
 CATRACA_CHANNEL_ID=
 OCR_CHANNEL_ID=
+WHISPER_BIN=
+WHISPER_MODEL=
 ```
 
 Preencha os valores localmente. Nunca publique o token do bot.
@@ -144,10 +164,14 @@ Preencha os valores localmente. Nunca publique o token do bot.
 - `DISCORD_TOKEN`: token privado do bot.
 - `USER_ID`: ID do membro utilizado pelo modo de teste.
 - `CATRACA_CHANNEL_ID`: ID do canal de check-in.
-- `OCR_CHANNEL_ID`: ID do canal de OCR.
+- `OCR_CHANNEL_ID`: ID do canal de OCR (também usado pela transcrição de áudio).
 - `OWNER_ID`: ID do usuário com acesso irrestrito ao `/ocr-limpar`.
 - `DISCORD_CLIENT_ID`: ID da aplicação do bot no Developer Portal (necessário para registrar o comando slash).
 - `GUILD_ID` (opcional): ID do servidor para registro local do comando durante desenvolvimento.
+- `WHISPER_BIN`: caminho do executável do whisper.cpp (necessária para transcrever).
+- `WHISPER_MODEL`: caminho do arquivo de modelo `.bin` (necessária para transcrever).
+- `WHISPER_LANGUAGE` (opcional): idioma da fala; padrão `pt`.
+- `FFMPEG_BIN` (opcional): caminho do executável `ffmpeg`; padrão `ffmpeg` no PATH.
 
 O arquivo `.env.example` serve como modelo sem credenciais reais. O arquivo `.env` deve permanecer ignorado pelo Git.
 
@@ -247,4 +271,4 @@ CheckIn
 
 O histórico das alterações está em [CHANGELOG.md](CHANGELOG.md).
 
-Próximas etapas: implementar e testar a transcrição de áudio, revisar a inicialização automática no Windows e avaliar opções de hospedagem contínua.
+Próximas etapas: validar a transcrição de áudio com o whisper.cpp e o ffmpeg instalados no ambiente, revisar a inicialização automática no Windows e avaliar opções de hospedagem contínua.
