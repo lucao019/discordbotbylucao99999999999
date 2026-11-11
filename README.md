@@ -1,321 +1,282 @@
-# CheckIn — Discord Bot
+﻿# CheckIn — Discord Utility Bot
 
-Bot para Discord desenvolvido em Node.js e TypeScript. O projeto reúne o sistema original de check-in de membros, geração de cards gráficos de perfil e extração de texto de imagens por OCR.
+Bot para Discord desenvolvido com Node.js e TypeScript. O projeto combina automação de entrada de membros com reconhecimento de texto em imagens (OCR).
 
-> **Estado atual:** check-in testado, reconstrução dos registros executada e OCR testado com sucesso no Discord. Hospedagem 24/7 ainda não configurada.
+## Estado do projeto
 
-## 1. Objetivo do projeto
+- [x] Conexão com o Discord.
+- [x] Check-in automático de membros.
+- [x] Geração de cards de perfil com Sharp.
+- [x] Suporte a banners animados em GIF.
+- [x] Modos de teste, sincronização e reconstrução da catraca.
+- [x] OCR de imagens em português e inglês.
+- [x] Gerenciador do canal OCR via `/ocr-limpar`.
+- [x] Integração contínua (GitHub Actions) com typecheck.
+- [x] Transcrição de áudio e vídeo no canal OCR (whisper.cpp local).
+- [ ] Validar e documentar a inicialização automática após as últimas alterações no ambiente local.
+- [ ] Avaliar hospedagem contínua fora do computador pessoal.
 
-O CheckIn automatiza tarefas de entrada e organização de membros de um servidor Discord.
+Os itens marcados como pendentes ainda não devem ser considerados funcionalidades concluídas.
 
-O projeto possui duas funções principais:
+## Funcionalidades
 
-- **Check-in de membros:** detecta entradas, gera um card de perfil e publica informações do membro no canal configurado para a catraca.
-- **OCR de imagens:** recebe imagens em um canal dedicado, reconhece o texto presente nelas e responde com texto copiável.
+### Check-in de membros
 
-As funcionalidades são mantidas no mesmo bot, organizadas em módulos para facilitar futuras expansões.
+Ao entrar um novo membro humano no servidor, o bot gera um card de perfil e publica as informações no canal configurado.
 
-## 2. Tecnologias utilizadas
+O registro pode incluir nome, usuário, identificador Discord, datas relevantes, número do membro, cargos e informações de boost disponíveis. O card pode utilizar avatar e banner, incluindo banners animados quando suportados.
 
-| Tecnologia | Finalidade |
-|---|---|
-| Node.js | Ambiente de execução JavaScript |
-| TypeScript | Desenvolvimento com tipagem |
-| discord.js | Integração com a API do Discord |
-| Sharp | Processamento e composição de imagens |
-| Tesseract.js | Reconhecimento óptico de caracteres (OCR) |
-| dotenv | Leitura de variáveis do arquivo `.env` |
-| tsx | Execução do código TypeScript |
-| npm | Instalação e gerenciamento de dependências |
-| Git | Controle de versões |
+### OCR de imagens
 
-## 3. Funcionalidades
+O bot processa imagens enviadas no canal configurado para OCR e devolve o texto reconhecido como mensagem copiável.
 
-### 3.1. Check-in automático
+O módulo está organizado em:
 
-O bot escuta o evento `GuildMemberAdd`.
+- `src/modules/ocr/recognize.ts`: reconhecimento de texto com Tesseract.js.
+- `src/modules/ocr/handler.ts`: validação de mensagens, anexos, download e resposta no Discord.
 
-Quando um membro humano entra no servidor, o código chama a função `gerarCheckIn()` e tenta publicar seu registro no canal configurado em `CATRACA_CHANNEL_ID`.
+O handler limita o processamento a três imagens por mensagem e 8 MB por imagem. Os formatos aceitos incluem PNG, JPEG, WebP, BMP e TIFF, conforme as validações implementadas no código.
 
-O registro contém:
+A precisão depende da qualidade da imagem. O OCR extrai texto, mas não garante interpretação correta do conteúdo.
 
-- Nome de exibição e nome de usuário.
-- Identificador da conta.
-- Data de criação e idade aproximada da conta.
-- Data de entrada no servidor.
-- Número do membro no registro.
-- Cargos e informações de boost, quando aplicáveis.
-- Card gráfico com avatar, banner quando disponível e identificação do CheckIn.
+### Gerenciador do canal OCR
 
-O card é montado com Sharp e publicado como anexo em uma mensagem incorporada (*embed*).
+O comando `/ocr-limpar` abre um painel de gerenciamento para limpar mensagens do canal OCR.
 
-### 3.2. OCR de imagens
+O módulo está em `src/modules/ocr-manager/` e é composto por:
 
-O módulo de OCR fica em `src/modules/ocr/`.
+- `command.ts`: definição do slash command e registro via REST na inicialização.
+- `handler.ts`: roteamento das interações de botões e do comando slash.
+- `operations.ts`: lógica de busca, exclusão em lote e paginação.
 
-O funcionamento é dividido em duas partes:
+#### Fluxos disponíveis
 
-- `recognize.ts`: inicializa o Tesseract.js e reconhece texto em português e inglês (`por+eng`).
-- `handler.ts`: valida mensagens, seleciona imagens, baixa os anexos permitidos, executa o reconhecimento e responde no Discord.
+**Limpar tudo** — solicita confirmação explícita antes de apagar todas as mensagens do canal. Usa bulk delete para mensagens com menos de 14 dias e exclusão individual para as mais antigas.
 
-O processamento é restrito ao canal cujo identificador está em `OCR_CHANNEL_ID`.
+**Limpar quantidade** — exibe botões para escolher entre 10, 25, 50 ou 100 mensagens recentes. Mostra uma prévia e exige confirmação antes de executar.
 
-Limites implementados no handler:
+**Seleção individual** — lista as mensagens recentes em páginas de 10 itens. Permite marcar e desmarcar individualmente antes de confirmar a exclusão.
 
-- Até três imagens por mensagem.
-- Até 8 MB por imagem.
-- Tipos de imagem reconhecidos por MIME type ou extensão: PNG, JPEG, WebP, BMP e TIFF.
-- Download limitado a hosts de anexos do Discord.
-- Tempo limite de 30 segundos para o download.
-- Respostas divididas em blocos para evitar mensagens excessivamente longas.
-- Tratamento de texto vazio e falhas de processamento.
+#### Autorização
 
-O OCR transforma o texto reconhecido em uma resposta copiável. Ele não interpreta necessariamente o significado do conteúdo nem garante reconhecimento perfeito em imagens de baixa qualidade.
+O comando só pode ser usado pelo usuário cujo ID está em `OWNER_ID`. Sem `OWNER_ID` configurado, ninguém tem acesso.
 
-## 4. Estrutura relevante do projeto
+O bot também verifica se possui `ManageMessages` no canal antes de executar qualquer exclusão.
+
+#### Registro do comando
+
+O comando é registrado via REST durante a inicialização do bot. Para isso, `DISCORD_CLIENT_ID` precisa estar configurado no `.env`.
+
+Se `GUILD_ID` estiver definido, o comando é registrado apenas naquele servidor (útil durante o desenvolvimento, pois fica disponível imediatamente). Sem `GUILD_ID`, o registro é global e pode levar até uma hora para propagar.
+
+#### Permissões necessárias no canal OCR
 
 ```text
-C:\CheckIn
+View Channel
+Send Messages
+Read Message History
+Manage Messages
+```
+
+### Painel de configurações
+
+Se `CONFIG_CHANNEL_ID` estiver definido, o bot publica no canal uma mensagem fixa com botões (e a atualiza nas próximas inicializações, sem duplicar):
+
+- **Limpar OCR (tudo)** e **Limpar OCR (últimas 50)**: apagam mensagens do canal OCR.
+- **Refazer cards**: atualiza os cards do #catraca editando as mensagens existentes.
+- **Reconstruir #catraca do zero**: apaga as mensagens do bot e as de entrada e gera todos os cards de novo, renumerando.
+
+Toda ação pede confirmação em uma mensagem visível só para quem clicou, e apenas uma ação roda por vez. O acesso é restrito ao `OWNER_ID`. O bot precisa de *Ver canal*, *Enviar mensagens*, *Inserir links* e *Ler histórico de mensagens* no canal.
+
+### Transcrição de áudio
+
+O bot transcreve áudios e vídeos enviados no mesmo canal configurado para OCR e devolve o texto reconhecido como mensagem copiável.
+
+O módulo está organizado em:
+
+- `src/modules/transcribe/transcribe.ts`: conversão do áudio para WAV mono 16 kHz via ffmpeg e execução do binário do whisper.cpp.
+- `src/modules/transcribe/handler.ts`: validação de mensagens, anexos, download e resposta no Discord.
+
+O handler limita o processamento a três anexos por mensagem e 25 MB por arquivo. São aceitos formatos de áudio e vídeo como OGG, OPUS, MP3, M4A, WAV, FLAC, WebM, MP4, MOV e MKV. Arquivos de imagem são ignorados aqui e tratados pelo OCR no mesmo canal.
+
+Diferente do OCR, a transcrição depende de programas externos instalados no ambiente — não há dependência npm. É necessário ter o `ffmpeg` e um binário do [whisper.cpp](https://github.com/ggerganov/whisper.cpp) disponíveis, além de um modelo compatível (por exemplo `ggml-base.bin`).
+
+A precisão depende da qualidade do áudio, do ruído e da clareza da fala. A transcrição reproduz a fala detectada, mas não garante pontuação ou interpretação correta do conteúdo.
+
+Variáveis relacionadas:
+
+- `WHISPER_BIN`: caminho do executável do whisper.cpp (obrigatória para transcrever).
+- `WHISPER_MODEL`: caminho do arquivo de modelo `.bin` (obrigatória para transcrever).
+- `WHISPER_LANGUAGE` (opcional): idioma da fala; padrão `pt`.
+- `FFMPEG_BIN` (opcional): caminho do executável `ffmpeg`; padrão `ffmpeg` no PATH.
+
+## Integração contínua
+
+O workflow em `.github/workflows/ci.yml` roda a cada push ou pull request na branch `main`. Ele instala as dependências com `npm ci` e executa o typecheck com `npx tsc --noEmit` nas versões 20 e 22 do Node.js.
+
+Não há suíte de testes automatizados. A verificação de build é feita pelo typecheck. Para rodar localmente:
+
+```powershell
+npx tsc --noEmit
+```
+
+## Tecnologias
+
+| Tecnologia | Uso |
+|---|---|
+| Node.js | Execução |
+| TypeScript | Código-fonte |
+| discord.js | API do Discord |
+| Sharp | Processamento de imagens e cards |
+| Tesseract.js | OCR |
+| dotenv | Variáveis de ambiente |
+| tsx | Execução do TypeScript |
+| npm | Dependências |
+| Docker | Empacotamento e deploy |
+| GitHub Actions | Integração contínua |
+| Git | Controle de versões |
+
+## Requisitos
+
+- Node.js e npm instalados.
+- Aplicação de bot criada no [Discord Developer Portal](https://discord.com/developers/applications).
+- Permissões adequadas nos canais do servidor.
+- Intents de membros do servidor e conteúdo de mensagens habilitadas no Developer Portal.
+
+## Instalação
+
+Clone o repositório e entre na pasta:
+
+```powershell
+git clone https://github.com/lucao019/discord-checkin-bot.git
+Set-Location "discord-checkin-bot"
+npm install
+```
+
+Crie o arquivo `.env` com as variáveis necessárias:
+
+```dotenv
+DISCORD_TOKEN=
+USER_ID=
+CATRACA_CHANNEL_ID=
+OCR_CHANNEL_ID=
+WHISPER_BIN=
+WHISPER_MODEL=
+```
+
+Preencha os valores localmente. Nunca publique o token do bot.
+
+## Configuração das variáveis
+
+- `DISCORD_TOKEN`: token privado do bot.
+- `USER_ID`: ID do membro utilizado pelo modo de teste.
+- `CATRACA_CHANNEL_ID`: ID do canal de check-in.
+- `OCR_CHANNEL_ID`: ID do canal de OCR (também usado pela transcrição de áudio).
+- `OWNER_ID`: ID do único usuário com acesso ao `/ocr-limpar` e ao painel de configurações.
+- `CONFIG_CHANNEL_ID` (opcional): ID do canal onde o bot publica o painel de configurações.
+- `DISCORD_CLIENT_ID`: ID da aplicação do bot no Developer Portal (necessário para registrar o comando slash).
+- `GUILD_ID` (opcional): ID do servidor para registro local do comando durante desenvolvimento.
+- `WHISPER_BIN`: caminho do executável do whisper.cpp (necessária para transcrever).
+- `WHISPER_MODEL`: caminho do arquivo de modelo `.bin` (necessária para transcrever).
+- `WHISPER_LANGUAGE` (opcional): idioma da fala; padrão `pt`.
+- `FFMPEG_BIN` (opcional): caminho do executável `ffmpeg`; padrão `ffmpeg` no PATH.
+
+O arquivo `.env.example` serve como modelo sem credenciais reais. O arquivo `.env` deve permanecer ignorado pelo Git.
+
+## Executar o bot
+
+Na pasta do projeto:
+
+```powershell
+npm start
+```
+
+O processo precisa permanecer ativo para receber eventos e mensagens.
+
+## Modos de operação
+
+Testar a geração de um card:
+
+```powershell
+npm start -- --test
+```
+
+Sincronizar os registros dos membros atuais:
+
+```powershell
+npm start -- --sync
+```
+
+Reconstruir a catraca:
+
+```powershell
+npm start -- --rebuild
+```
+
+**Atenção:** `--rebuild` remove mensagens do próprio bot e mensagens de sistema identificadas no canal da catraca antes de gerar os registros novamente. Confira o canal e entenda o efeito antes de executar.
+
+## Deploy com Docker
+
+O projeto inclui um `Dockerfile` baseado em `node:18-alpine` com a inicialização via `npm start`. A imagem instala as dependências com `npm ci` (incluindo `tsx`, usado em tempo de execução) e roda o bot com `tsx src/index.ts`.
+
+Para construir e rodar localmente:
+
+```powershell
+docker build -t checkin .
+docker run --env-file .env checkin
+```
+
+As variáveis de ambiente devem ser fornecidas em tempo de execução — nunca embutidas na imagem. O `.dockerignore` mantém `node_modules`, `.env`, `.git` e outros artefatos locais fora do contexto de build.
+
+## Testar o OCR
+
+1. Configure `OCR_CHANNEL_ID`.
+2. Inicie o bot.
+3. Envie uma imagem com texto no canal configurado.
+4. Compare a resposta com o conteúdo original.
+
+Se não houver resposta, confira a conexão do bot, as permissões do canal, o ID configurado e os erros do terminal.
+
+## Estrutura principal
+
+```text
+CheckIn
+├── .github
+│   └── workflows
+│       └── ci.yml
 ├── src
 │   ├── index.ts
 │   └── modules
-│       └── ocr
+│       ├── ocr
+│       │   ├── handler.ts
+│       │   └── recognize.ts
+│       └── ocr-manager
+│           ├── command.ts
 │           ├── handler.ts
-│           └── recognize.ts
-├── .env
+│           └── operations.ts
+├── eng.traineddata
+├── por.traineddata
+├── .dockerignore
 ├── .env.example
 ├── .gitignore
+├── Dockerfile
 ├── package.json
 ├── package-lock.json
 ├── README.md
 └── CHANGELOG.md
 ```
 
-A estrutura acima destaca os arquivos envolvidos neste trabalho. Outros arquivos e módulos existentes no repositório devem ser preservados.
+## Segurança
 
-### Responsabilidade de cada arquivo
+- Nunca versione `.env` ou tokens.
+- Não publique credenciais em logs, prints ou documentação.
+- Revise `git status` antes de cada commit.
+- Use `git diff --check` para verificar problemas de formatação.
+- Não execute `--rebuild` sem avaliar o efeito sobre o canal.
+- Registre no changelog somente alterações realmente feitas e testadas.
 
-- `src/index.ts`: inicialização do cliente Discord, intents, check-in automático, modos de teste e encaminhamento das mensagens para o OCR.
-- `src/modules/ocr/recognize.ts`: reconhecimento de texto com Tesseract.js.
-- `src/modules/ocr/handler.ts`: validação e processamento das imagens enviadas ao canal OCR.
-- `.env`: configurações privadas da instalação local.
-- `.env.example`: modelo das variáveis necessárias, sem credenciais reais.
-- `package.json`: dependências e scripts npm.
-- `package-lock.json`: versões resolvidas das dependências.
+## Desenvolvimento e histórico
 
-## 5. Pré-requisitos
+O histórico das alterações está em [CHANGELOG.md](CHANGELOG.md).
 
-Antes de iniciar o projeto, tenha instalado:
-
-1. Node.js em uma versão compatível com as dependências.
-2. npm, incluído normalmente com Node.js.
-3. Git, caso deseje clonar ou versionar o repositório.
-4. Uma aplicação de bot criada no Discord Developer Portal.
-5. Um servidor Discord no qual o bot possa acessar os canais necessários.
-
-## 6. Instalação passo a passo
-
-Abra o PowerShell e entre na pasta do projeto:
-
-```powershell
-Set-Location C:\CheckIn
-```
-
-Confira as versões instaladas:
-
-```powershell
-node --version
-npm --version
-git --version
-```
-
-Instale as dependências declaradas no projeto:
-
-```powershell
-npm install
-```
-
-Durante a implementação do OCR, a dependência foi adicionada com:
-
-```powershell
-npm install tesseract.js
-```
-
-Confira se ela está instalada:
-
-```powershell
-npm ls tesseract.js --depth=0
-```
-
-A versão observada durante o desenvolvimento foi `tesseract.js@7.0.0`.
-
-## 7. Configuração do arquivo .env
-
-Crie ou edite o arquivo `.env` na raiz do projeto.
-
-As variáveis utilizadas pelo código são:
-
-```dotenv
-DISCORD_TOKEN=SEU_TOKEN_PRIVADO
-USER_ID=ID_DO_USUARIO_PARA_TESTE
-CATRACA_CHANNEL_ID=ID_DO_CANAL_DA_CATRACA
-OCR_CHANNEL_ID=ID_DO_CANAL_OCR
-```
-
-Substitua os valores de exemplo pelos identificadores corretos da sua instalação.
-
-- `DISCORD_TOKEN`: token privado do bot.
-- `USER_ID`: identificador do membro usado no modo de teste.
-- `CATRACA_CHANNEL_ID`: canal em que os cards de check-in são publicados.
-- `OCR_CHANNEL_ID`: canal exclusivo para processar imagens por OCR.
-
-O `.env` não deve ser publicado no GitHub. Mantenha-o listado no `.gitignore` e nunca inclua o token em prints, mensagens ou documentação pública.
-
-O `.env.example` deve conter apenas os nomes das variáveis e valores vazios ou de exemplo.
-
-## 8. Configuração do Discord Developer Portal
-
-Acesse:
-
-https://discord.com/developers/applications
-
-Selecione a aplicação CheckIn e entre em **Bot**.
-
-Em **Intenções de gateway privilegiadas**, habilite:
-
-- **Intenção dos membros do servidor** (*Server Members Intent*).
-- **Intenção de conteúdo da mensagem** (*Message Content Intent*).
-
-A intenção de presença não é necessária para as funções documentadas aqui.
-
-Salve as alterações.
-
-O código utiliza as intents `Guilds`, `GuildMembers`, `GuildMessages` e `MessageContent`. As duas primeiras intents privilegiadas da lista acima são necessárias para o comportamento implementado.
-
-Também confira as permissões do bot nos canais: visualizar o canal, ler o histórico quando necessário e enviar mensagens. Para publicar cards, ele precisa poder enviar mensagens incorporadas e anexar arquivos.
-
-## 9. Como iniciar o bot
-
-No PowerShell:
-
-```powershell
-Set-Location C:\CheckIn
-npm start
-```
-
-Quando a conexão funcionar, o terminal deverá exibir o nome do bot e a mensagem de que está aguardando novos membros.
-
-Mantenha o processo ativo. Enquanto o bot estiver desconectado, ele não executará o evento de entrada em tempo real.
-
-## 10. Modos de operação e testes
-
-### Testar a geração de um card
-
-```powershell
-npm start -- --test
-```
-
-O modo de teste usa `USER_ID` para localizar um membro existente e chama a rotina de geração do card em modo de teste.
-
-Esse teste verifica a geração e o envio do card. Ele não simula uma entrada real no servidor.
-
-### Sincronizar os registros
-
-```powershell
-npm start -- --sync
-```
-
-O modo de sincronização percorre os membros atuais, exclui contas de bot da coleção e envia cards com a numeração calculada para cada membro.
-
-### Reconstruir a catraca
-
-```powershell
-npm start -- --rebuild
-```
-
-**Atenção:** a reconstrução apaga, no canal configurado para a catraca, as mensagens do próprio CheckIn e as mensagens identificadas pelo Discord como mensagens de sistema. Em seguida, gera novamente os cards dos membros atuais.
-
-Não use esse comando como substituto de um teste comum. Ele altera o histórico do canal e deve ser executado conscientemente.
-
-Os modos `--test`, `--sync` e `--rebuild` encerram o cliente ao terminar ou ao tratar uma falha no fluxo de inicialização.
-
-## 11. Como testar o OCR
-
-1. Inicie o bot com `npm start`.
-2. Abra o canal cujo ID está em `OCR_CHANNEL_ID`.
-3. Envie uma imagem contendo texto.
-4. Aguarde o reconhecimento e confira a resposta.
-5. Copie o texto retornado e compare com a imagem original.
-
-O primeiro reconhecimento pode demorar enquanto os dados de idioma necessários são preparados. A disponibilidade desses dados e o acesso à internet podem afetar a primeira execução.
-
-Teste também imagens com texto pequeno, múltiplas linhas e diferentes níveis de qualidade.
-
-Mensagens em outros canais não devem ser processadas pelo handler de OCR.
-
-## 12. Histórico de problemas e soluções
-
-### Erro `ENOENT` ao executar `npm start`
-
-**Causa:** o comando foi executado em `C:\WINDOWS\system32`, onde não existe o `package.json` do projeto.
-
-**Solução:**
-
-```powershell
-Set-Location C:\CheckIn
-npm start
-```
-
-### Erro `Used disallowed intents`
-
-**Causa identificada:** o Discord recusou a conexão porque uma ou mais intents solicitadas não estavam autorizadas na aplicação.
-
-**Solução aplicada:** habilitar as intents privilegiadas de membros do servidor e conteúdo de mensagens no Developer Portal, salvar as configurações e iniciar novamente o bot.
-
-### OCR sem resposta
-
-Verifique:
-
-1. Se o bot está conectado.
-2. Se `OCR_CHANNEL_ID` corresponde ao canal correto.
-3. Se o bot pode visualizar o canal e enviar mensagens.
-4. Se a mensagem contém um anexo de imagem compatível.
-5. Se o terminal mostra algum erro durante o processamento.
-
-Não publique o `.env` para diagnosticar esse problema.
-
-## 13. Segurança e boas práticas
-
-- Nunca versionar o `.env`.
-- Não compartilhar tokens ou credenciais.
-- Não apagar backups sem verificar se são necessários.
-- Executar `git diff --check` antes de registrar alterações.
-- Revisar o conteúdo de cada arquivo antes do commit.
-- Testar o check-in e o OCR após alterações em `src/index.ts`.
-- Evitar reconstruções desnecessárias do canal da catraca.
-- Registrar no changelog apenas mudanças efetivamente realizadas e verificadas.
-
-## 14. Hospedagem
-
-Atualmente, o projeto foi testado em ambiente local no Windows.
-
-O objetivo futuro é avaliar uma hospedagem que mantenha o processo Node.js ativo 24 horas por dia, sem depender do PC pessoal.
-
-Oracle Cloud é uma possibilidade a ser investigada, mas sua configuração, disponibilidade de recursos gratuitos e funcionamento contínuo ainda precisam ser testados. Não considere a hospedagem concluída antes dessa validação.
-
-## 15. Estado do projeto
-
-- [x] Bot conectado ao Discord.
-- [x] Geração de card verificada pelo modo `--test`.
-- [x] Reconstrução dos registros dos membros executada.
-- [x] OCR testado no canal configurado.
-- [x] Intents privilegiadas configuradas.
-- [ ] Revisão final de todos os arquivos e do Git.
-- [ ] Commit das alterações documentadas.
-- [ ] Configuração e teste de hospedagem 24/7.
-
-## 16. Próxima etapa
-
-Antes de publicar uma nova versão, revisar o `README.md`, o `CHANGELOG.md`, o diff do código e o estado do Git. Só então registrar o commit da versão validada.
-
-O objetivo é manter um histórico reproduzível: cada etapa deve informar o que foi feito, por que foi necessário, qual comando foi executado, qual resultado foi observado e qual é o próximo checkpoint.
+Próximas etapas: validar a transcrição de áudio com o whisper.cpp e o ffmpeg instalados no ambiente, revisar a inicialização automática no Windows e avaliar opções de hospedagem contínua.

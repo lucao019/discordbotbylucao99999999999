@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import { initLogger } from './logger'
+
+initLogger()
 
 import {
   AttachmentBuilder,
@@ -7,12 +10,18 @@ import {
   Events,
   GatewayIntentBits,
   GuildMember,
+  Message,
   TextChannel,
   User,
 } from 'discord.js'
 
 import sharp from 'sharp'
 import { processOcrMessage } from './modules/ocr/handler'
+import { registerOcrCommands } from './modules/ocr-manager/command.js'
+import { handleOcrLimparCommand, handleOcrManagerButton } from './modules/ocr-manager/handler.js'
+import { processTranscribeMessage } from './modules/transcribe/handler'
+import { handleConfigPanelButton, initConfigPanel } from './modules/config-panel/panel.js'
+import { startTwitchLiveMonitor } from './modules/twitch/liveMonitor'
 
 const token = process.env.DISCORD_TOKEN
 const userId = process.env.USER_ID
@@ -121,25 +130,26 @@ async function gerarProfileCard(
   member: GuildMember,
   user: User,
   numero: number,
+  // 2 = card em alta resolução (1800×780); 1 = tamanho original (900×390).
+  escala = 2,
 ): Promise<{
   buffer: Buffer
   extension: 'png' | 'gif'
 }> {
-  const largura = 900
-  const altura = 390
-  const bannerHeight = 220
+  const S = escala
+  const largura = 900 * S
+  const altura = 390 * S
+  const bannerHeight = 220 * S
 
-
-
-  const avatarSize = 150
-  const avatarX = 50
-  const avatarY = 170
+  const avatarSize = 150 * S
+  const avatarX = 50 * S
+  const avatarY = 170 * S
 
   const bannerAnimado =
     user.banner?.startsWith('a_') ?? false
 
   const bannerUrl = user.bannerURL({
-    size: 1024,
+    size: bannerAnimado ? 1024 : 2048,
     extension: bannerAnimado
       ? 'gif'
       : 'png',
@@ -157,7 +167,7 @@ async function gerarProfileCard(
   const gradiente = Buffer.from(`
     <svg
       width="${largura}"
-      height="180"
+      height="${180 * S}"
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
@@ -229,7 +239,7 @@ async function gerarProfileCard(
   // BORDA DO AVATAR
   // --------------------------------
 
-  const bordaSize = avatarSize + 14
+  const bordaSize = avatarSize + 14 * S
 
   const borda = Buffer.from(`
     <svg
@@ -240,7 +250,7 @@ async function gerarProfileCard(
       <circle
         cx="${bordaSize / 2}"
         cy="${bordaSize / 2}"
-        r="${bordaSize / 2 - 2}"
+        r="${bordaSize / 2 - 2 * S}"
         fill="#111318"
       />
     </svg>
@@ -267,51 +277,51 @@ async function gerarProfileCard(
       <style>
         .name {
           fill: white;
-          font-size: 36px;
+          font-size: ${36 * S}px;
           font-weight: 700;
           font-family: Arial, sans-serif;
         }
 
         .user {
           fill: #b5bac1;
-          font-size: 22px;
+          font-size: ${22 * S}px;
           font-family: Arial, sans-serif;
         }
 
         .member {
           fill: #b5bac1;
-          font-size: 19px;
+          font-size: ${19 * S}px;
           font-family: Arial, sans-serif;
         }
 
         .checkin {
           fill: #7d8590;
-          font-size: 16px;
+          font-size: ${16 * S}px;
           font-family: Arial, sans-serif;
         }
       </style>
 
       <text
-        x="230"
-        y="285"
+        x="${230 * S}"
+        y="${285 * S}"
         class="name"
       >${displayName}</text>
 
       <text
-        x="230"
-        y="320"
+        x="${230 * S}"
+        y="${320 * S}"
         class="user"
       >@${username}</text>
 
       <text
-        x="230"
-        y="352"
+        x="${230 * S}"
+        y="${352 * S}"
         class="member"
       >MEMBER #${numero}</text>
 
       <text
-        x="745"
-        y="360"
+        x="${745 * S}"
+        y="${360 * S}"
         class="checkin"
       >CHECKIN</text>
     </svg>
@@ -324,13 +334,13 @@ async function gerarProfileCard(
   const layersFixas: sharp.OverlayOptions[] = [
     {
   input: gradiente,
-  top: 40,
+  top: 40 * S,
   left: 0,
 },
     {
       input: borda,
-      top: avatarY - 7,
-      left: avatarX - 7,
+      top: avatarY - 7 * S,
+      left: avatarX - 7 * S,
     },
     {
       input: avatar,
@@ -408,68 +418,105 @@ async function gerarProfileCard(
     }
   }
 
-    // --------------------------------
+  // --------------------------------
   // BANNER ANIMADO
   // --------------------------------
 
-  const metadata = await sharp(
-    bannerBuffer,
-    {
-      animated: true,
-    },
-  ).metadata()
+  try {
+    const metadata = await sharp(bannerBuffer, { animated: true }).metadata()
 
-  const paginas = metadata.pages ?? 1
+    const paginas = metadata.pages ?? 1
+    // O sharp só aceita 0..65535; valores fora disso (ex.: 65536) viram loop infinito.
+    const loop =
+      metadata.loop !== undefined && metadata.loop <= 65535 ? metadata.loop : 0
+    const delays =
+      metadata.delay && metadata.delay.length === paginas
+        ? metadata.delay
+        : Array<number>(paginas).fill(100)
 
-  const delays =
-    metadata.delay &&
-    metadata.delay.length === paginas
-      ? metadata.delay
-      : Array(paginas).fill(100)
+    // Compõe cada quadro do banner como um card completo (900×390)
+    const quadros: Buffer[] = []
 
-
-    const layersAnimadas: sharp.OverlayOptions[] = []
-
-  for (let pagina = 0; pagina < paginas; pagina++) {
-    const offsetY = pagina * altura
-
-    for (const layer of layersFixas) {
-      layersAnimadas.push({
-        ...layer,
-        top:
-          typeof layer.top === 'number'
-            ? layer.top + offsetY
-            : offsetY,
+    for (let pagina = 0; pagina < paginas; pagina++) {
+      const fundoBanner = await sharp(bannerBuffer, {
+        animated: true,
+        page: pagina,
+        pages: 1,
       })
+        .resize(largura, bannerHeight, { fit: 'cover', position: 'centre' })
+        .png()
+        .toBuffer()
+
+      const quadro = await sharp({
+        create: {
+          width: largura,
+          height: altura,
+          channels: 4,
+          background: '#111318',
+        },
+      })
+        .composite([
+          { input: fundoBanner, top: 0, left: 0 },
+          ...layersFixas,
+        ])
+        .raw()
+        .toBuffer()
+
+      quadros.push(quadro)
     }
-  }
 
-  const buffer = await sharp(
-    bannerBuffer,
-    {
-      animated: true,
-    },
-  )
-    .resize(largura, bannerHeight, {
-  fit: 'cover',
-  position: 'centre',
-})
-.extend({
-  bottom: altura - bannerHeight,
-  background: '#111318',
-})
-    .composite(layersAnimadas)
-    .gif({
-      loop: metadata.loop ?? 0,
-      delay: delays,
+    // Empilha os quadros em RGBA cru e codifica como um único GIF animado.
+    // pageHeight faz o sharp reinterpretar a imagem empilhada como N quadros.
+    const buffer = await sharp(Buffer.concat(quadros), {
+      raw: {
+        width: largura,
+        height: altura * paginas,
+        channels: 4,
+        pageHeight: altura,
+      },
     })
-    .toBuffer()
+      .gif({ loop, delay: delays })
+      .toBuffer()
 
-    return {
-    buffer,
-    extension: 'gif',
+    // Limite de upload do Discord: se o GIF em alta resolução ficar pesado,
+    // refaz em tamanho normal.
+    if (buffer.length > 8 * 1024 * 1024 && S > 1) {
+      console.warn(
+        `[CATRACA] GIF de ${(buffer.length / 1048576).toFixed(1)} MB; refazendo em escala 1x.`,
+      )
+      return gerarProfileCard(member, user, numero, 1)
+    }
+
+    return { buffer, extension: 'gif' }
+  } catch (erro) {
+    console.error(
+      '[CATRACA] Falha no banner animado, usando PNG estático:',
+      erro,
+    )
+
+    const banner = await sharp(bannerBuffer)
+      .resize(largura, bannerHeight, { fit: 'cover', position: 'centre' })
+      .png()
+      .toBuffer()
+
+    const buffer = await sharp({
+      create: {
+        width: largura,
+        height: altura,
+        channels: 4,
+        background: '#111318',
+      },
+    })
+      .composite([
+        { input: banner, top: 0, left: 0 },
+        ...layersFixas,
+      ])
+      .png()
+      .toBuffer()
+
+    return { buffer, extension: 'png' }
   }
-} 
+}
 
 // ====================================
 // TREE VIEW
@@ -590,6 +637,7 @@ async function gerarCheckIn(
   member: GuildMember,
   teste = false,
   numeroMembro?: number,
+  editar?: Message,
 ) {
   const channel =
     await client.channels.fetch(
@@ -624,6 +672,10 @@ async function gerarCheckIn(
       user,
       numero,
     )
+
+  console.log(
+    `  card ${profileCard.extension.toUpperCase()}: ${(profileCard.buffer.length / 1048576).toFixed(2)} MB`,
+  )
 
   const nomeArquivo =
   `checkin-profile.${profileCard.extension}`
@@ -669,7 +721,7 @@ const arquivo =
           ` • ${user.id}`,
       })
 
-      .setTimestamp()
+      .setTimestamp(editar?.createdTimestamp ?? Date.now())
 
   if (user.accentColor != null) {
   embed.setColor(
@@ -677,10 +729,19 @@ const arquivo =
   )
 }
 
-  await channel.send({
-    embeds: [embed],
-    files: [arquivo],
-  })
+  if (editar) {
+    // Substitui o card no lugar, mantendo a posição e a data da mensagem.
+    await editar.edit({
+      embeds: [embed],
+      files: [arquivo],
+      attachments: [],
+    })
+  } else {
+    await channel.send({
+      embeds: [embed],
+      files: [arquivo],
+    })
+  }
 
   console.log(
     `✓ ${user.username} → membro #${numero}`,
@@ -768,6 +829,157 @@ async function sincronizarCatraca() {
   )
 }
 
+
+// ====================================
+// RECUPERAÇÃO DE MEMBROS PERDIDOS
+// ====================================
+
+// Lê o #catraca e devolve os IDs que já têm card.
+// O ID do membro é o último trecho do rodapé do embed.
+async function idsJaRegistrados(channel: TextChannel) {
+  const registrados = new Set<string>()
+  let antes: string | undefined
+
+  while (true) {
+    const mensagens = await channel.messages.fetch({
+      limit: 100,
+      ...(antes ? { before: antes } : {}),
+    })
+
+    if (mensagens.size === 0) break
+
+    for (const message of mensagens.values()) {
+      if (message.author.id !== client.user?.id) continue
+
+      for (const embed of message.embeds) {
+        const id = embed.footer?.text?.split('•').pop()?.trim()
+        if (id && /^\d{15,25}$/.test(id)) registrados.add(id)
+      }
+    }
+
+    antes = mensagens.last()?.id
+    if (mensagens.size < 100) break
+  }
+
+  return registrados
+}
+
+// Cria cards apenas para quem entrou com o bot offline.
+async function recuperarMembrosFaltantes() {
+  const channel = await client.channels.fetch(catracaChannelId)
+
+  if (!channel || !(channel instanceof TextChannel)) {
+    throw new Error('#catraca não encontrado.')
+  }
+
+  const registrados = await idsJaRegistrados(channel)
+  const membros = await obterMembrosOrdenados()
+
+  const faltantes = membros
+    .map((member, i) => ({ member, numero: i + 1 }))
+    .filter(({ member }) => !registrados.has(member.id))
+
+  if (faltantes.length === 0) {
+    console.log('Catraca em dia: nenhum membro faltando.')
+    return
+  }
+
+  console.log(
+    `${faltantes.length} membro(s) sem card. Recuperando...`,
+  )
+
+  let enviados = 0
+
+  for (const { member, numero } of faltantes) {
+    try {
+      await gerarCheckIn(member, false, numero)
+      enviados++
+      await esperar(1800)
+    } catch (error) {
+      console.error(`✗ ${member.user.username}`, error)
+    }
+  }
+
+  console.log(
+    `${enviados}/${faltantes.length} cards recuperados.`,
+  )
+}
+
+// ====================================
+// REFAZER CARDS DE QUEM TEM NITRO
+// ====================================
+
+// A API não informa o Nitro de outros usuários; banner e avatar animado
+// só existem com Nitro, então servem como indicador.
+function temNitro(user: User) {
+  return Boolean(user.banner) || (user.avatar?.startsWith('a_') ?? false)
+}
+
+// modo 'nitro' refaz quem tem Nitro; 'restantes' refaz todos os outros.
+async function refazerCards(modo: 'nitro' | 'restantes') {
+  const channel = await client.channels.fetch(catracaChannelId)
+
+  if (!channel || !(channel instanceof TextChannel)) {
+    throw new Error('#catraca não encontrado.')
+  }
+
+  const guild = channel.guild
+  const mensagens: Message[] = []
+  let antes: string | undefined
+
+  while (true) {
+    const lote = await channel.messages.fetch({
+      limit: 100,
+      ...(antes ? { before: antes } : {}),
+    })
+
+    if (lote.size === 0) break
+
+    for (const m of lote.values()) {
+      if (m.author.id === client.user?.id && m.embeds.length > 0) mensagens.push(m)
+    }
+
+    antes = lote.last()?.id
+    if (lote.size < 100) break
+  }
+
+  let refeitos = 0
+  let ignorados = 0
+
+  for (const message of mensagens.reverse()) {
+    const embed = message.embeds[0]
+    const id = embed?.footer?.text?.split('•').pop()?.trim()
+    if (!id || !/^\d{15,25}$/.test(id)) continue
+
+    const member = await guild.members.fetch(id).catch(() => null)
+    if (!member) {
+      ignorados++
+      continue
+    }
+
+    const user = await buscarUsuarioCompleto(member.user)
+    if (temNitro(user) !== (modo === 'nitro')) continue
+
+    const numero = Number(/membro: #(\d+)/.exec(embed?.description ?? '')?.[1])
+
+    try {
+      await gerarCheckIn(
+        member,
+        false,
+        Number.isFinite(numero) && numero > 0 ? numero : undefined,
+        message,
+      )
+      refeitos++
+      await esperar(1800)
+    } catch (error) {
+      console.error(`✗ ${user.username}`, error)
+    }
+  }
+
+  console.log(
+    `${refeitos} card(s) refeito(s) (${modo}). ${ignorados} membro(s) que saíram foram ignorados.`,
+  )
+}
 
 // ====================================
 // REBUILD COMPLETO DA CATRACA
@@ -906,6 +1118,9 @@ async function reconstruirCatraca() {
 // READY
 // ====================================
 
+client.on('error', (error) => console.error('Erro do cliente Discord:', error))
+client.on('shardError', (error) => console.error('Erro de conexão (shard):', error))
+
 client.once(
   Events.ClientReady,
   async (readyClient) => {
@@ -921,6 +1136,21 @@ client.once(
     console.log(
       `Bot: ${readyClient.user.tag}`,
     )
+
+    // Registrar comando /ocr-limpar
+    const clientId = process.env.DISCORD_CLIENT_ID
+
+    if (!clientId) {
+      console.log(
+        '⚠ DISCORD_CLIENT_ID não configurado — comando /ocr-limpar não será registrado.',
+      )
+    } else {
+      await registerOcrCommands(
+        token,
+        clientId,
+        process.env.GUILD_ID,
+      )
+    }
 
     try {
       // TESTE
@@ -970,6 +1200,21 @@ client.once(
         return
       }      
 
+      // REFAZER CARDS COM NITRO
+      if (process.argv.includes('--refazer-nitro')) {
+        await refazerCards('nitro')
+        client.destroy()
+        return
+      }
+
+      // REFAZER OS DEMAIS CARDS (SEM NITRO)
+      if (process.argv.includes('--refazer-restantes')) {
+        await refazerCards('restantes')
+
+        client.destroy()
+        return
+      }
+
       // SYNC
       if (
         process.argv.includes('--sync')
@@ -980,9 +1225,21 @@ client.once(
         return
       }
 
+      // Cobre quem entrou enquanto o bot estava offline.
+      try {
+        await recuperarMembrosFaltantes()
+      } catch (error) {
+        console.error('Erro na recuperação:', error)
+      }
+
       console.log(
         'Aguardando novos membros...',
       )
+      startTwitchLiveMonitor(readyClient)
+      await initConfigPanel(readyClient, {
+        refazerCards,
+        reconstruirCatraca,
+      })
     } catch (error) {
       console.error(
         'ERRO:',
@@ -1022,6 +1279,32 @@ client.on(
 client.on(Events.MessageCreate, async (message) => {
   if (!process.env.OCR_CHANNEL_ID || message.channelId !== process.env.OCR_CHANNEL_ID) return
   await processOcrMessage(message)
+  await processTranscribeMessage(message)
+})
+
+// ====================================
+// INTERAÇÕES (SLASH COMMANDS E BOTÕES)
+// ====================================
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  try {
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === 'ocr-limpar') {
+        await handleOcrLimparCommand(interaction)
+      }
+      return
+    }
+
+    if (interaction.isButton()) {
+      if (interaction.customId.startsWith('ocr_mgr:')) {
+        await handleOcrManagerButton(interaction)
+      } else if (interaction.customId.startsWith('cfg:')) {
+        await handleConfigPanelButton(interaction)
+      }
+    }
+  } catch (error) {
+    console.error('Erro no InteractionCreate:', error)
+  }
 })
 
 client.login(token)

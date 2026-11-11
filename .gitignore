@@ -1,3 +1,15 @@
 node_modules/
 dist/
 .env
+
+# Artefatos de ferramentas locais
+.agents/
+.kiro/
+
+# Logs e temporários
+*.log
+npm-debug.log*
+
+# Logs de erro gerados pelo bot
+logs/
+models/
