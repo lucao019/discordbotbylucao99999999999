@@ -17,7 +17,8 @@ Todas as alterações relevantes do projeto são registradas neste arquivo em or
 
 ### Testes
 
-- Tipagem verificada com `tsc --noEmit`. Ainda não validado no Discord.
+- Tipagem verificada com `tsc --noEmit`.
+- Módulo testado no Discord pelo dono do servidor, que confirmou o funcionamento do log de moderação, do anti-raid e do anti-spam.
 
 ### Pendente
 
