@@ -34,23 +34,10 @@ const selectionState = new Map<string, Set<string>>()
 export function isAuthorized(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
 ): boolean {
-  if (interaction.user.id === process.env.OWNER_ID) {
-    return true
-  }
+  // Somente o dono do bot (OWNER_ID no .env). Sem OWNER_ID, ninguém acessa.
+  const dono = process.env.OWNER_ID?.trim()
 
-  const member = interaction.member
-
-  if (member instanceof GuildMember) {
-    const channel = interaction.channel
-
-    if (channel instanceof TextChannel) {
-      return member
-        .permissionsIn(channel)
-        .has(PermissionFlagsBits.ManageMessages)
-    }
-  }
-
-  return false
+  return Boolean(dono) && interaction.user.id === dono
 }
 
 export function botHasManageMessages(

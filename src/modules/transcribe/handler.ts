@@ -35,6 +35,39 @@ function splitText(text: string, maxLength = 1800): string[] {
   return chunks
 }
 
+// Mantém o aviso de "carregando": o bot aparece digitando e a mensagem de
+// status mostra o tempo decorrido. Retorna a função que encerra os dois.
+function iniciarCarregamento(message: Message, status: Message, nome: string) {
+  const inicio = Date.now()
+  const frames = ['⏳', '⌛']
+  let n = 0
+
+  const digitando = () => {
+    if ('sendTyping' in message.channel) {
+      message.channel.sendTyping().catch(() => undefined)
+    }
+  }
+
+  digitando()
+  const typingTimer = setInterval(digitando, 8000)
+
+  const statusTimer = setInterval(() => {
+    const segundos = Math.round((Date.now() - inicio) / 1000)
+    n++
+    status
+      .edit({
+        content: `${frames[n % frames.length]} Transcrevendo **${nome}**… ${segundos}s`,
+        allowedMentions: { repliedUser: false },
+      })
+      .catch(() => undefined)
+  }, 5000)
+
+  return () => {
+    clearInterval(typingTimer)
+    clearInterval(statusTimer)
+  }
+}
+
 export async function processTranscribeMessage(message: Message): Promise<void> {
   const channelId = process.env.OCR_CHANNEL_ID
 
@@ -50,6 +83,9 @@ export async function processTranscribeMessage(message: Message): Promise<void> 
   if (media.length === 0) return
 
   for (const attachment of media) {
+    let status: Message | undefined
+    let parar: (() => void) | undefined
+
     try {
       if (attachment.size > MAX_MEDIA_SIZE) {
         await message.reply({
@@ -65,6 +101,15 @@ export async function processTranscribeMessage(message: Message): Promise<void> 
         continue
       }
 
+      const nome = attachment.name ?? 'audio'
+
+      // Aviso de carregamento imediato, antes do download e da transcrição.
+      status = await message.reply({
+        content: `⏳ Transcrevendo **${nome}**… 0s`,
+        allowedMentions: { repliedUser: false },
+      })
+      parar = iniciarCarregamento(message, status, nome)
+
       const response = await fetch(url, {
         redirect: 'error',
         signal: AbortSignal.timeout(30000),
@@ -75,11 +120,14 @@ export async function processTranscribeMessage(message: Message): Promise<void> 
       }
 
       const buffer = Buffer.from(await response.arrayBuffer())
-      const text = await transcribeAudio(buffer, attachment.name ?? 'audio')
+      const text = await transcribeAudio(buffer, nome)
+
+      parar()
+      parar = undefined
 
       if (!text) {
-        await message.reply({
-          content: `Não foi possível reconhecer fala em "${attachment.name ?? 'sem nome'}".`,
+        await status.edit({
+          content: `Não foi possível reconhecer fala em "${nome}".`,
           allowedMentions: { repliedUser: false },
         })
         continue
@@ -87,20 +135,31 @@ export async function processTranscribeMessage(message: Message): Promise<void> 
 
       const chunks = splitText(text.replace(/```/g, "'''"))
 
-      for (const chunk of chunks) {
-        await message.reply({
-          content: `\`\`\`\n${chunk}\n\`\`\``,
-          allowedMentions: { repliedUser: false },
-        })
+      // O primeiro trecho substitui a mensagem de carregamento.
+      for (const [i, chunk] of chunks.entries()) {
+        const content = `\`\`\`\n${chunk}\n\`\`\``
+
+        if (i === 0) {
+          await status.edit({ content, allowedMentions: { repliedUser: false } })
+        } else {
+          await message.reply({ content, allowedMentions: { repliedUser: false } })
+        }
       }
     } catch (error) {
+      parar?.()
       console.error('Erro ao transcrever áudio:', error)
-      await message
-        .reply({
-          content: `Falha ao transcrever "${attachment.name ?? 'sem nome'}".`,
-          allowedMentions: { repliedUser: false },
-        })
-        .catch(() => undefined)
+
+      const falha = `Falha ao transcrever "${attachment.name ?? 'sem nome'}".`
+
+      if (status) {
+        await status
+          .edit({ content: falha, allowedMentions: { repliedUser: false } })
+          .catch(() => undefined)
+      } else {
+        await message
+          .reply({ content: falha, allowedMentions: { repliedUser: false } })
+          .catch(() => undefined)
+      }
     }
   }
 }

@@ -59,10 +59,7 @@ O módulo está em `src/modules/ocr-manager/` e é composto por:
 
 #### Autorização
 
-O comando só pode ser usado por:
-
-- O usuário cujo ID está em `OWNER_ID`.
-- Usuários com a permissão `ManageMessages` no canal.
+O comando só pode ser usado pelo usuário cujo ID está em `OWNER_ID`. Sem `OWNER_ID` configurado, ninguém tem acesso.
 
 O bot também verifica se possui `ManageMessages` no canal antes de executar qualquer exclusão.
 
@@ -80,6 +77,16 @@ Send Messages
 Read Message History
 Manage Messages
 ```
+
+### Painel de configurações
+
+Se `CONFIG_CHANNEL_ID` estiver definido, o bot publica no canal uma mensagem fixa com botões (e a atualiza nas próximas inicializações, sem duplicar):
+
+- **Limpar OCR (tudo)** e **Limpar OCR (últimas 50)**: apagam mensagens do canal OCR.
+- **Refazer cards**: atualiza os cards do #catraca editando as mensagens existentes.
+- **Reconstruir #catraca do zero**: apaga as mensagens do bot e as de entrada e gera todos os cards de novo, renumerando.
+
+Toda ação pede confirmação em uma mensagem visível só para quem clicou, e apenas uma ação roda por vez. O acesso é restrito ao `OWNER_ID`. O bot precisa de *Ver canal*, *Enviar mensagens*, *Inserir links* e *Ler histórico de mensagens* no canal.
 
 ### Transcrição de áudio
 
@@ -165,7 +172,8 @@ Preencha os valores localmente. Nunca publique o token do bot.
 - `USER_ID`: ID do membro utilizado pelo modo de teste.
 - `CATRACA_CHANNEL_ID`: ID do canal de check-in.
 - `OCR_CHANNEL_ID`: ID do canal de OCR (também usado pela transcrição de áudio).
-- `OWNER_ID`: ID do usuário com acesso irrestrito ao `/ocr-limpar`.
+- `OWNER_ID`: ID do único usuário com acesso ao `/ocr-limpar` e ao painel de configurações.
+- `CONFIG_CHANNEL_ID` (opcional): ID do canal onde o bot publica o painel de configurações.
 - `DISCORD_CLIENT_ID`: ID da aplicação do bot no Developer Portal (necessário para registrar o comando slash).
 - `GUILD_ID` (opcional): ID do servidor para registro local do comando durante desenvolvimento.
 - `WHISPER_BIN`: caminho do executável do whisper.cpp (necessária para transcrever).

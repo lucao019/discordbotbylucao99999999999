@@ -22,7 +22,14 @@ O projeto do SSD (`H:\PROJETOS\CheckIn`) e a cópia do Desktop tinham seguido ca
 - Monitoramento de live da Twitch (`src/modules/twitch/liveMonitor.ts`): consulta a API Helix a cada minuto e avisa no canal definido em `TWITCH_NOTIFY_CHANNEL_ID`. Sem as credenciais, apenas registra o aviso e o bot segue normalmente. Novas variáveis: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_CHANNEL_LOGIN`, `TWITCH_NOTIFY_CHANNEL_ID`.
 - Log de erros (`src/logger.ts`): `console.error` e `console.warn` continuam no terminal e também vão para `logs/erros-AAAA-MM-DD.log`. Crashes (`uncaughtException`) e promessas rejeitadas (`unhandledRejection`) são registrados, assim como erros de conexão do discord.js. Logs com mais de 14 dias são apagados ao iniciar. A pasta `logs/` está no `.gitignore` e no `.dockerignore`.
 - Cards em alta resolução: 1800×780 (escala 2×), em vez de 900×390. Se um GIF passar de 8 MB, o card é refeito em escala 1×, por causa do limite de upload do Discord. A largura exibida no Discord não muda, pois o embed tem largura máxima fixa; o ganho é de nitidez.
+- Painel de configurações (`src/modules/config-panel/panel.ts`): o bot posta uma mensagem fixa com botões no canal definido em `CONFIG_CHANNEL_ID` (e atualiza a mesma mensagem nas próximas inicializações, sem duplicar). Ações: limpar o canal OCR inteiro, limpar as últimas 50 mensagens do OCR, refazer os cards do #catraca (edita no lugar) e reconstruir o #catraca do zero. Cada ação pede confirmação em uma mensagem visível só para quem clicou, e só uma ação roda por vez. Acesso restrito ao `OWNER_ID`.
+- Indicador de carregamento na transcrição: o bot responde na hora com "Transcrevendo…", atualiza o tempo decorrido a cada 5 segundos, aparece como "digitando" e, ao terminar, troca a própria mensagem pelo texto transcrito (ou pelo aviso de erro).
+- `iniciar-bot.bat`: liga o bot com dois cliques e o reinicia 15 segundos depois de um crash. Não inicia junto com o Windows.
 - Comandos para refazer cards editando as mensagens existentes, sem apagar nem alterar a ordem: `--refazer-nitro` (quem tem banner ou avatar animado, usados como indicador de Nitro, já que a API não informa o Nitro de outros usuários) e `--refazer-restantes` (os demais).
+
+### Alterado
+
+- `/ocr-limpar` passou a aceitar apenas o `OWNER_ID`; antes também aceitava quem tinha a permissão Gerenciar mensagens.
 
 ### Testes
 
@@ -32,11 +39,13 @@ O projeto do SSD (`H:\PROJETOS\CheckIn`) e a cópia do Desktop tinham seguido ca
 - OCR testado localmente com uma imagem gerada: texto reconhecido corretamente.
 - Transcrição testada localmente com um áudio sintético em português: texto reconhecido corretamente em cerca de 6 s.
 - Crash, promessa rejeitada e `console.error` simulados: os três registrados no arquivo de log.
+- Painel de configurações: publicado e funcionando no Discord, conforme confirmado pelo dono. As ações destrutivas ainda não foram executadas por ele em produção.
+- Indicador de carregamento da transcrição e restrição do `/ocr-limpar`: apenas verificados com `tsc --noEmit`; falta testar no Discord.
 
 ### Pendente
 
 - `--rebuild` do #catraca para renumerar tudo pela ordem real de entrada. Há números repetidos nos cards antigos (#45 e #50), herdados da numeração feita no momento da entrada de cada membro.
-- Validar no Discord, com mensagens reais no canal OCR, o OCR e a transcrição de áudio.
+- Validar no Discord, com mensagens reais no canal OCR, o OCR, a transcrição de áudio e o indicador de carregamento.
 - Validar o aviso de live com credenciais da Twitch.
 - Hospedagem 24/7; hoje o bot só roda enquanto o comando `npm start` estiver aberto no PC.
 

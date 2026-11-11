@@ -20,6 +20,7 @@ import { processOcrMessage } from './modules/ocr/handler'
 import { registerOcrCommands } from './modules/ocr-manager/command.js'
 import { handleOcrLimparCommand, handleOcrManagerButton } from './modules/ocr-manager/handler.js'
 import { processTranscribeMessage } from './modules/transcribe/handler'
+import { handleConfigPanelButton, initConfigPanel } from './modules/config-panel/panel.js'
 import { startTwitchLiveMonitor } from './modules/twitch/liveMonitor'
 
 const token = process.env.DISCORD_TOKEN
@@ -1235,6 +1236,10 @@ client.once(
         'Aguardando novos membros...',
       )
       startTwitchLiveMonitor(readyClient)
+      await initConfigPanel(readyClient, {
+        refazerCards,
+        reconstruirCatraca,
+      })
     } catch (error) {
       console.error(
         'ERRO:',
@@ -1293,6 +1298,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('ocr_mgr:')) {
         await handleOcrManagerButton(interaction)
+      } else if (interaction.customId.startsWith('cfg:')) {
+        await handleConfigPanelButton(interaction)
       }
     }
   } catch (error) {
