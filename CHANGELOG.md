@@ -40,11 +40,11 @@ O projeto do SSD (`H:\PROJETOS\CheckIn`) e a cópia do Desktop tinham seguido ca
 - Transcrição testada localmente com um áudio sintético em português: texto reconhecido corretamente em cerca de 6 s.
 - Crash, promessa rejeitada e `console.error` simulados: os três registrados no arquivo de log.
 - Painel de configurações: publicado e funcionando no Discord, conforme confirmado pelo dono. As ações destrutivas ainda não foram executadas por ele em produção.
+- Reconstrução do #catraca pelo botão do painel: executada pelo dono no Discord e concluída ("#catraca reconstruído"), sem erros novos em `logs/`. Os números repetidos (#45 e #50) vinham dos cards antigos; a conferência visual da nova numeração ficou com o dono.
 - Indicador de carregamento da transcrição e restrição do `/ocr-limpar`: apenas verificados com `tsc --noEmit`; falta testar no Discord.
 
 ### Pendente
 
-- `--rebuild` do #catraca para renumerar tudo pela ordem real de entrada. Há números repetidos nos cards antigos (#45 e #50), herdados da numeração feita no momento da entrada de cada membro.
 - Validar no Discord, com mensagens reais no canal OCR, o OCR, a transcrição de áudio e o indicador de carregamento.
 - Validar o aviso de live com credenciais da Twitch.
 - Hospedagem 24/7; hoje o bot só roda enquanto o comando `npm start` estiver aberto no PC.
