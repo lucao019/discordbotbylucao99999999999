@@ -4,6 +4,29 @@ Todas as alterações relevantes do projeto são registradas neste arquivo em or
 
 ---
 
+## [Não lançado] — 2026-11-11 (segurança)
+
+### Adicionado
+
+- Módulo de segurança (`src/modules/security/index.ts`), ativado na inicialização. Alertas e logs vão para o canal privado definido em `SECURITY_LOG_CHANNEL_ID`.
+  - **Log de moderação:** mensagens apagadas e editadas, banimentos, banimentos removidos e saídas de membros. Os canais OCR, #catraca, #configs e o próprio canal de log são ignorados, para a limpeza de rotina não gerar ruído.
+  - **Anti-raid:** quando `RAID_JOIN_THRESHOLD` entradas ocorrem em `RAID_WINDOW_SECONDS`, o bot envia um alerta com a lista de quem entrou e a idade de cada conta, com botões para travar convites, liberar convites e expulsar as contas novas do raid (esta pede confirmação). Com `RAID_AUTO_LOCK=true`, os convites são travados sozinhos. Os botões são restritos ao `OWNER_ID`.
+  - **Anti-spam:** remove convites de outros servidores, menções em massa (`@everyone` ou 5 ou mais menções), links de contas novas que acabaram de entrar e flood (6 mensagens em 5 s, com timeout de 10 min). Três infrações em 10 minutos geram timeout de 30 min. Administradores, quem tem Gerenciar mensagens ou Gerenciar servidor e o `OWNER_ID` são isentos.
+- Novas variáveis: `SECURITY_LOG_CHANNEL_ID`, `RAID_JOIN_THRESHOLD`, `RAID_WINDOW_SECONDS`, `NEW_ACCOUNT_DAYS`, `RAID_AUTO_LOCK`.
+- O cliente passou a usar o intent `GuildModeration` e `Partials.Message`/`Partials.Channel`, para receber exclusões e edições de mensagens fora do cache.
+
+### Testes
+
+- Tipagem verificada com `tsc --noEmit`.
+- Módulo testado no Discord pelo dono do servidor, que confirmou o funcionamento do log de moderação, do anti-raid e do anti-spam.
+
+### Pendente
+
+- Criar o canal de log, definir `SECURITY_LOG_CHANNEL_ID` e testar cada proteção.
+- O bot precisa das permissões Moderar membros, Expulsar membros e Gerenciar servidor para timeout, expulsão e travar convites.
+
+---
+
 ## [Não lançado] — 2026-11-11
 
 ### Contexto

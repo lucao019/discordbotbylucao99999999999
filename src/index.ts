@@ -11,6 +11,7 @@ import {
   GatewayIntentBits,
   GuildMember,
   Message,
+  Partials,
   TextChannel,
   User,
 } from 'discord.js'
@@ -21,6 +22,7 @@ import { registerOcrCommands } from './modules/ocr-manager/command.js'
 import { handleOcrLimparCommand, handleOcrManagerButton } from './modules/ocr-manager/handler.js'
 import { processTranscribeMessage } from './modules/transcribe/handler'
 import { handleConfigPanelButton, initConfigPanel } from './modules/config-panel/panel.js'
+import { handleSecurityButton, initSecurity } from './modules/security/index.js'
 import { startTwitchLiveMonitor } from './modules/twitch/liveMonitor'
 
 const token = process.env.DISCORD_TOKEN
@@ -43,7 +45,10 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildModeration,
   ],
+  // Necessário para receber exclusões/edições de mensagens fora do cache.
+  partials: [Partials.Message, Partials.Channel],
 })
 
 const esperar = (ms: number) =>
@@ -1236,6 +1241,7 @@ client.once(
         'Aguardando novos membros...',
       )
       startTwitchLiveMonitor(readyClient)
+      initSecurity(readyClient)
       await initConfigPanel(readyClient, {
         refazerCards,
         reconstruirCatraca,
@@ -1300,6 +1306,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleOcrManagerButton(interaction)
       } else if (interaction.customId.startsWith('cfg:')) {
         await handleConfigPanelButton(interaction)
+      } else if (interaction.customId.startsWith('sec:')) {
+        await handleSecurityButton(interaction)
       }
     }
   } catch (error) {
