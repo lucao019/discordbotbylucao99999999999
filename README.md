@@ -174,6 +174,7 @@ Preencha os valores localmente. Nunca publique o token do bot.
 - `OCR_CHANNEL_ID`: ID do canal de OCR (também usado pela transcrição de áudio).
 - `OWNER_ID`: ID do único usuário com acesso ao `/ocr-limpar` e ao painel de configurações.
 - `CONFIG_CHANNEL_ID` (opcional): ID do canal onde o bot publica o painel de configurações.
+- `CHAT_GERAL_CHANNEL_ID` (opcional): ID do #chat-geral, usado pelo botões do painel que apagam as últimas 1, 5 ou 10 mensagens.
 - `DISCORD_CLIENT_ID`: ID da aplicação do bot no Developer Portal (necessário para registrar o comando slash).
 - `GUILD_ID` (opcional): ID do servidor para registro local do comando durante desenvolvimento.
 - `WHISPER_BIN`: caminho do executável do whisper.cpp (necessária para transcrever).

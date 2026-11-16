@@ -30,7 +30,20 @@ export type PainelAcoes = {
   reconstruirCatraca: () => Promise<void>
 }
 
-type Acao = 'ocr_tudo' | 'ocr_50' | 'refazer_cards' | 'rebuild'
+type Acao =
+  | 'ocr_tudo'
+  | 'ocr_50'
+  | 'geral_1'
+  | 'geral_5'
+  | 'geral_10'
+  | 'refazer_cards'
+  | 'rebuild'
+
+const QTD_GERAL: Record<'geral_1' | 'geral_5' | 'geral_10', number> = {
+  geral_1: 1,
+  geral_5: 5,
+  geral_10: 10,
+}
 
 const ACOES: Record<
   Acao,
@@ -44,6 +57,21 @@ const ACOES: Record<
   ocr_50: {
     titulo: 'Limpar as últimas 50 mensagens do OCR',
     aviso: 'Apaga as **50 mensagens mais recentes** do canal OCR.',
+    irreversivel: true,
+  },
+  geral_1: {
+    titulo: 'Apagar a última mensagem do #chat-geral',
+    aviso: 'Apaga a **mensagem mais recente** do #chat-geral.',
+    irreversivel: true,
+  },
+  geral_5: {
+    titulo: 'Apagar as últimas 5 mensagens do #chat-geral',
+    aviso: 'Apaga as **5 mensagens mais recentes** do #chat-geral.',
+    irreversivel: true,
+  },
+  geral_10: {
+    titulo: 'Apagar as últimas 10 mensagens do #chat-geral',
+    aviso: 'Apaga as **10 mensagens mais recentes** do #chat-geral.',
     irreversivel: true,
   },
   refazer_cards: {
@@ -89,6 +117,9 @@ function montarPainel() {
         '• *Limpar tudo*: apaga todas as mensagens do canal.',
         '• *Limpar últimas 50*: apaga só as mais recentes.',
         '',
+        '**💬 Canal #chat-geral**',
+        '• *Apagar 1 / 5 / 10*: apaga as mensagens mais recentes.',
+        '',
         '**🪪 Canal #catraca**',
         '• *Refazer cards*: atualiza os cards existentes, sem apagar.',
         '• *Reconstruir do zero*: apaga e gera tudo de novo.',
@@ -112,6 +143,24 @@ function montarPainel() {
       .setStyle(ButtonStyle.Secondary),
   )
 
+  const linhaGeral = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${PREFIXO}ask:geral_1`)
+      .setLabel('Geral: apagar 1')
+      .setEmoji('💬')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`${PREFIXO}ask:geral_5`)
+      .setLabel('Geral: apagar 5')
+      .setEmoji('💬')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`${PREFIXO}ask:geral_10`)
+      .setLabel('Geral: apagar 10')
+      .setEmoji('💬')
+      .setStyle(ButtonStyle.Secondary),
+  )
+
   const linhaCatraca = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`${PREFIXO}ask:refazer_cards`)
@@ -125,7 +174,7 @@ function montarPainel() {
       .setStyle(ButtonStyle.Danger),
   )
 
-  return { embeds: [embed], components: [linhaOcr, linhaCatraca] }
+  return { embeds: [embed], components: [linhaOcr, linhaGeral, linhaCatraca] }
 }
 
 // Cria o painel no canal ou atualiza o que já existe (sem duplicar).
@@ -197,6 +246,26 @@ async function executar(acao: Acao, client: Client): Promise<string> {
 
     return (
       `🧹 ${deleted} mensagem(ns) apagada(s) no canal OCR.` +
+      (failed > 0 ? ` ⚠️ ${failed} não puderam ser apagadas.` : '')
+    )
+  }
+
+  if (acao === 'geral_1' || acao === 'geral_5' || acao === 'geral_10') {
+    const geralId = process.env.CHAT_GERAL_CHANNEL_ID?.trim()
+    const canal = geralId ? await client.channels.fetch(geralId) : null
+
+    if (!canal || !(canal instanceof TextChannel)) {
+      throw new Error('CHAT_GERAL_CHANNEL_ID não aponta para um canal de texto.')
+    }
+
+    const mensagens = await fetchRecentMessages(canal, QTD_GERAL[acao])
+
+    if (mensagens.length === 0) return 'O #chat-geral já está vazio.'
+
+    const { deleted, failed } = await deleteMessages(canal, mensagens)
+
+    return (
+      `💬 ${deleted} mensagem(ns) apagada(s) no #chat-geral.` +
       (failed > 0 ? ` ⚠️ ${failed} não puderam ser apagadas.` : '')
     )
   }
