@@ -561,5 +561,5 @@ export function initSecurity(client: Client): void {
   ligarAntiRaid(client)
   ligarAntiSpam(client)
 
-  console.log('✓ Módulo de segurança ativo (log, anti-raid, anti-spam).')
+  console.log('  ✓ Security            active (audit log, anti-raid, anti-spam)')
 }

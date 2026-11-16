@@ -885,7 +885,7 @@ async function recuperarMembrosFaltantes() {
     .filter(({ member }) => !registrados.has(member.id))
 
   if (faltantes.length === 0) {
-    console.log('Catraca em dia: nenhum membro faltando.')
+    console.log('  ✓ Member registry     up to date')
     return
   }
 
@@ -1129,25 +1129,18 @@ client.on('shardError', (error) => console.error('Erro de conexão (shard):', er
 client.once(
   Events.ClientReady,
   async (readyClient) => {
-    console.log(
-      '=================================',
-    )
-    console.log(
-      '     CHECKIN LAYERED ONLINE',
-    )
-    console.log(
-      '=================================',
-    )
-    console.log(
-      `Bot: ${readyClient.user.tag}`,
-    )
+    console.log('')
+    console.log('  CHECKIN  ·  Server Operations')
+    console.log('  ─────────────────────────────')
+    console.log(`  Connected as ${readyClient.user.tag}`)
+    console.log('')
 
     // Registrar comando /ocr-limpar
     const clientId = process.env.DISCORD_CLIENT_ID
 
     if (!clientId) {
       console.log(
-        '⚠ DISCORD_CLIENT_ID não configurado — comando /ocr-limpar não será registrado.',
+        '  ○ Slash commands      skipped (DISCORD_CLIENT_ID not set)',
       )
     } else {
       await registerOcrCommands(
@@ -1237,15 +1230,16 @@ client.once(
         console.error('Erro na recuperação:', error)
       }
 
-      console.log(
-        'Aguardando novos membros...',
-      )
       startTwitchLiveMonitor(readyClient)
       initSecurity(readyClient)
       await initConfigPanel(readyClient, {
         refazerCards,
         reconstruirCatraca,
       })
+
+      console.log('')
+      console.log('  Online — all systems operational.')
+      console.log('')
     } catch (error) {
       console.error(
         'ERRO:',
@@ -1268,7 +1262,7 @@ client.on(
 
     try {
       console.log(
-        `→ Entrada: ${member.user.username}`,
+        `  → Member joined: ${member.user.username}`,
       )
 
       await gerarCheckIn(member)

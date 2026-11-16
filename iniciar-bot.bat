@@ -1,18 +1,13 @@
 @echo off
 chcp 65001 >nul
-title CheckIn Bot
+title CheckIn
 cd /d "%~dp0"
-
-echo ==================================
-echo   CheckIn Bot
-echo   Feche esta janela para desligar.
-echo ==================================
-echo.
+cls
 
 :inicio
-call npm start
+call npm start --silent
 echo.
-echo [%date% %time%] Bot encerrado. Veja a pasta logs\ para o motivo.
-echo Reiniciando em 15 segundos... (feche a janela para cancelar)
+echo   [%date% %time%] Process exited. Restarting in 15s... (close this window to stop)
 timeout /t 15 /nobreak >nul
+cls
 goto inicio

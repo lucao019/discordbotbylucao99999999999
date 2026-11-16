@@ -214,7 +214,7 @@ export async function initConfigPanel(
       await canal.send(montarPainel())
     }
 
-    console.log('✓ Painel de configurações pronto.')
+    console.log('  ✓ Control panel       ready')
   } catch (error) {
     console.error('Erro ao criar o painel de configurações:', error)
   }

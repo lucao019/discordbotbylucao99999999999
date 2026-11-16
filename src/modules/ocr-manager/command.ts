@@ -29,7 +29,7 @@ export async function registerOcrCommands(
 
     await rest.put(rota, { body: [ocrLimparCommand] })
 
-    console.log('✓ Comando /ocr-limpar registrado com sucesso.')
+    console.log('  ✓ Slash commands      registered')
   } catch (error) {
     console.error('✗ Falha ao registrar comando /ocr-limpar:', error)
   }

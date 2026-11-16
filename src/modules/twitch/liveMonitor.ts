@@ -31,9 +31,7 @@ function readConfig(): LiveMonitorConfig | null {
   const discordChannelId = process.env.TWITCH_NOTIFY_CHANNEL_ID?.trim()
 
   if (!clientId || !clientSecret || !channelLogin || !discordChannelId) {
-    console.error(
-      'Monitoramento Twitch não iniciado: configure TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, TWITCH_CHANNEL_LOGIN e TWITCH_NOTIFY_CHANNEL_ID no .env.',
-    )
+    console.log('  ○ Twitch alerts       disabled (not configured)')
     return null
   }
 
@@ -115,9 +113,7 @@ export function startTwitchLiveMonitor(client: Client) {
   const getAccessToken = createTokenProvider(config)
   let lastStreamId: string | null = null
 
-  console.log(
-    `Monitoramento Twitch ativo para ${config.channelLogin}; verificações a cada ${pollIntervalMs / 1000} segundos.`,
-  )
+  console.log(`  ✓ Twitch alerts       watching ${config.channelLogin}`)
 
   const checkStream = async () => {
     try {
